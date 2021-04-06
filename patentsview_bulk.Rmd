@@ -105,12 +105,15 @@ patent <- vroom::vroom(fnames$filename[29], delim = "\t", col_names = TRUE, na =
 
 # unzipping and then reading in seems to work with data table.
 patent <- data.table::fread("data-raw/patent.tsv") # 7.6 million
+
 rawgender<- vroom::vroom(fnames$filename[33], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A")) # slightly out
 rawinventor <- vroom::vroom(fnames$filename[36], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A")) # cannot load
 rawinventor <- data.table::fread("data-raw/rawinventor.tsv") # 18.5 million, exact nrow match
 
 rawlocation <- vroom::vroom(fnames$filename[38], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A"))
 rawlocation <- data.table::fread("data-raw/rawlocation.tsv") # expect 30,016,844, got exact nrow
+
+ipc <- vroom::vroom(fnames$filename[14], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A"))
 
 # conclusion. Use data.table fread for larger file types. 
 
@@ -121,10 +124,8 @@ saveRDS(patent_inventor, file = "data/patent_inventor.rds")
 saveRDS(rawgender, file = "data/rawgender.rds")
 saveRDS(rawinventor, file = "data/rawinventor.rds")
 saveRDS(rawlocation, file = "data/rawlocation.rds")
+saveRDS(ipc, file = "data/ipc.rds")
 
 ```
 
-```{r}
-
-```
 
