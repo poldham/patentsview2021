@@ -24,8 +24,6 @@ women_inventors <- inventor %>% filter(male_flag == 0)
 save(women_inventors, file = "data/women_inventors.rda", compress = "xz")
 ```
 
-hello
-
 
 Make the link to the patents table through the patents_inventor table
 
@@ -34,7 +32,38 @@ women_patents <- patent_inventor %>%
   mutate(women = .$inventor_id %in% women_inventors$id) %>% 
   filter(women == TRUE)
 
-save(women_patents, file = "data/women_inventors.rda", compress = "xz")
+save(women_patents, file = "data/women_patents.rda", compress = "xz")
 ```
 
+```{r}
+women_granted <- patent %>% 
+  mutate(women = .$id %in% women_patents$patent_id) %>% 
+  filter(women == TRUE)
+```
+
+test if more than one woman is present on the same patent. Expecting 1.7 million and got 1.3 million. Answer is yes. 
+
+```{r}
+women_patents %>% 
+  count(patent_id, sort = TRUE) %>% 
+  nrow() # matches the number of patent docs returned above.
+```
+
+```{r}
+women_ipc <- ipc %>% 
+  mutate(women = .$patent_id %in% women_patents$patent_id) %>% 
+  filter(women == TRUE) %>% 
+  unite(ipc_subclass, c("section", "ipc_class", "subclass"), sep = "", remove = FALSE) %>% 
+  unite(ipc_maingroup, c("ipc_subclass", "main_group"), sep = "/", remove = FALSE)
+
+women_ipc %>% 
+  count(ipc_subclass, sort = TRUE) %>% 
+  View()
+
+women_ipc %>% 
+  count(ipc_maingroup, sort = TRUE) %>% 
+  View()
+
+save(women_ipc, file = "data/women_ipc.rda", compress = "xz")
+```
 
