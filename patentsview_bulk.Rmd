@@ -1,0 +1,130 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Patents View Data Download
+
+This document describes the process for bulk downloading the main USPTO patents view data files from the data download page at [https://patentsview.org/download/data-download-tables](https://patentsview.org/download/data-download-tables). 
+
+It does not presently cover the following datasets that are downloadable separately 
+
+- Pre grant applications [https://patentsview.org/download/pg-download-tables](https://patentsview.org/download/pg-download-tables)
+- brief summary [https://patentsview.org/download/brf_sum_text](https://patentsview.org/download/brf_sum_text)
+- claims [https://patentsview.org/download/claims](https://patentsview.org/download/claims)
+- detailed description [https://patentsview.org/download/detail_desc_text](https://patentsview.org/download/detail_desc_text)
+- drawing description text [https://patentsview.org/download/draw_desc_text](https://patentsview.org/download/draw_desc_text)
+
+However, the same code provided here can be used to download these files. 
+
+For individual files see the 
+
+### Creating a Table and file names
+
+We start by using the rvest library to obtain the patentsview data download table. We then construct the file names and also add in the urls to the storage on Amazon Web Services.
+
+```{r, eval=FALSE}
+library(tidyverse)
+library(rvest)
+library(glue)
+
+# note this misses the raw gender link. The reason is the raw gender file does not have the same filename as on screen. It is raw_gender_12292020.tsv.zip. Will need to be manually downloaded for now. 
+
+html <- read_html("https://patentsview.org/download/data-download-tables")
+
+patentsview_table <- html %>% 
+  html_table() %>% 
+  .[[2]] %>% 
+  janitor::clean_names() %>% 
+  separate(table_name, into = c("file_name", "bits"), sep = ":") %>% 
+  separate(file_name, c("file_name", "type"), sep = "zip") %>% 
+  drop_na(type) %>%
+  mutate(file_name = str_trim(file_name, side = "both")) %>% 
+  mutate(full_name = glue::glue('{file_name}.tsv.zip')) %>% 
+  mutate(url = glue::glue('https://s3.amazonaws.com/data.patentsview.org/download/{full_name}'))
+```
+
+
+```{r, eval=FALSE, echo=FALSE}
+save(patentsview_table, file = "data/patentsview_table.rda", compress = "xz")
+write_csv(patentsview_table, file = "data/patentsview_table.csv")
+```
+
+
+```{r loadpvtable, echo=FALSE, message=FALSE, error=FALSE}
+library(tidyverse)
+
+load("~/Documents/patentsview2021/data/patentsview_table.rda")
+
+patentsview_table %>%
+  head() %>% 
+  knitr::kable()
+  
+```
+
+
+We now iterate over the urls for each file and add the name. This will download all the files to your working directory (so you may want to ensure you are in an R project).
+
+We use some code kindly provided by [Matt Herman](https://community.rstudio.com/t/download-multiple-files-using-download-file-function-while-skipping-broken-links-with-walk2/51222) in answer to a question on the RStudio community. The nice feature of Matt's code is that the use of `safely()` means that if for some reason one of the URLs goes wrong then it will not fail completely but skip on to the next file. The walk2 function from the purrr library allows us to map the url and append the file name (required by the base R download.file function as destfile). This is also an example of the use of formulas in R where .x in safe_download stands for the url and .y for the file name. 
+
+Be aware that this will download 48 files of different sizes totalling about 5.3 Gigabytes. So, that will depend on your connection and you also need to check fr free space on disk. The data will expand a lot when it is unzipped. 
+
+Note that while a strength of this approach is that it will attempt to download everything, you may discover afterwards that some files have only partially downloaded (if a connection was interrupted for some reason etc.), This can happen with larger files. It is worth checking file sizes against the expected sizes in the patentsview_table (the fs package may make that easier).
+
+```{r, eval=FALSE}
+safe_download <- safely(~ download.file(.x , .y, mode = "wb"))
+walk2(patentsview_table$url, patentsview_table$full_name, safe_download)
+```
+
+### Unzipping the data
+
+To unzip the data we can either create a folder for the files we want to unzip and save (which will save on disk space) or we can unzip them all (if we are not worried about disk space). 
+
+First up we need to get the file names. Then we will use the vroom package with some arguments to control what is happening. PATENTS VIEW CODE SNIPPETS GO HERE. 
+
+We start by getting the full file paths and creating a table. We then create a file name column with keeping the .tsv ending for our destination file.
+
+```{r}
+fnames <- list.files("data-raw", pattern = ".zip", full.names = TRUE) %>% 
+  tibble::tibble(filename = .) %>% 
+  mutate(fname = str_remove_all(filename, "data-raw/|[.]zip"))
+```
+
+<!--- cross check rvest code as raw gender did not download and unclear why not--->
+
+```{r}
+library(vroom)
+application <- vroom::vroom(fnames$filename[1], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A")) # nrow match
+inventor <- vroom::vroom(fnames$filename[13], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A")) # a few out
+patent_inventor <- vroom::vroom(fnames$filename[27], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A")) # crosswalk between patents and inventors. table nrows match
+patent <- vroom::vroom(fnames$filename[29], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A")) # comes back truncated should be 7.6 million. data.table fread reports an embedded  null. 
+
+# unzipping and then reading in seems to work with data table.
+patent <- data.table::fread("data-raw/patent.tsv") # 7.6 million
+rawgender<- vroom::vroom(fnames$filename[33], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A")) # slightly out
+rawinventor <- vroom::vroom(fnames$filename[36], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A")) # cannot load
+rawinventor <- data.table::fread("data-raw/rawinventor.tsv") # 18.5 million, exact nrow match
+
+rawlocation <- vroom::vroom(fnames$filename[38], delim = "\t", col_names = TRUE, na = c("", " ", "na", "NA", "N/A"))
+rawlocation <- data.table::fread("data-raw/rawlocation.tsv") # expect 30,016,844, got exact nrow
+
+# conclusion. Use data.table fread for larger file types. 
+
+saveRDS(application, file = "data/application.rds")
+saveRDS(inventor, file = "data/inventor.rds")
+saveRDS(patent, file = "data/patent.rds")
+saveRDS(patent_inventor, file = "data/patent_inventor.rds")
+saveRDS(rawgender, file = "data/rawgender.rds")
+saveRDS(rawinventor, file = "data/rawinventor.rds")
+saveRDS(rawlocation, file = "data/rawlocation.rds")
+
+```
+
+```{r}
+
+```
+

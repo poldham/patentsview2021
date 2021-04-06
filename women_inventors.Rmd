@@ -1,0 +1,40 @@
+---
+title: "untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Women Inventors
+
+The raw data is in rawgender. The post inventor disambiguated data is in 
+
+1. Load the inventor table 
+2. Filter on the male_flag (why is it called that really)
+3. Use the patent_inventor cross walk table to make the join across to granted patents
+4. From there do other things.
+
+Read the methods paper on gender at this link [https://s3.amazonaws.com/data.patentsview.org/documents/On-line+Appendix+-+Gender+Attribution+of+USPTO+Inventors.pdf](https://s3.amazonaws.com/data.patentsview.org/documents/On-line+Appendix+-+Gender+Attribution+of+USPTO+Inventors.pdf). Lots of interesting content including a WIPO list.
+
+```{r}
+women_inventors <- inventor %>% filter(male_flag == 0)
+
+save(women_inventors, file = "data/women_inventors.rda", compress = "xz")
+```
+
+hello
+
+
+Make the link to the patents table through the patents_inventor table
+
+```{r}
+women_patents <- patent_inventor %>% 
+  mutate(women = .$inventor_id %in% women_inventors$id) %>% 
+  filter(women == TRUE)
+
+save(women_patents, file = "data/women_inventors.rda", compress = "xz")
+```
+
+
